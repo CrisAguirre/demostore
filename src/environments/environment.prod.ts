@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://libkn.onrender.com/api'
+  apiUrl: 'https://demostorebkn.onrender.com/api'
 };
