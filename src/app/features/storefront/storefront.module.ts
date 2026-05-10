@@ -1,0 +1,10 @@
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { StorefrontComponent } from './storefront.component';
+
+@NgModule({
+  declarations: [StorefrontComponent],
+  imports: [CommonModule, RouterModule.forChild([{ path: '', component: StorefrontComponent }])]
+})
+export class StorefrontModule {}

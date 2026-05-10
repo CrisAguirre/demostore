@@ -1,0 +1,123 @@
+<div class="page-header">
+  <h1>📦 Inventario</h1>
+  <div class="header-actions">
+    <select class="form-input filter-select" [(ngModel)]="filterCategory" (change)="onFilterCategory()">
+      <option value="">Todas las categorías</option>
+      <option *ngFor="let c of categories" [value]="c._id">{{ c.icon }} {{ c.name }} ({{ c.code }})</option>
+    </select>
+    <input class="form-input search-input" placeholder="🔍 Buscar producto..." [(ngModel)]="searchTerm" (input)="onSearch()">
+    <button class="btn-primary" (click)="openNewForm()" *ngIf="authService.hasRole('admin')">+ Nuevo Producto</button>
+  </div>
+</div>
+
+<!-- ═══ FORMULARIO DE PRODUCTO ═══ -->
+<div class="neon-card product-form mb-3" *ngIf="showForm">
+  <div class="form-header">
+    <h3>{{ editingProduct ? '✏️ Editar Producto' : '➕ Registrar Producto' }}</h3>
+    <button class="btn-ghost btn-sm" (click)="cancelForm()">✕ Cerrar</button>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-group span-2">
+      <label class="form-label">Categoría</label>
+      <select class="form-input" [(ngModel)]="form.category" (change)="onCategoryChange()">
+        <option value="" disabled>Seleccionar categoría...</option>
+        <option *ngFor="let c of categories" [value]="c._id">{{ c.icon }} {{ c.name }} — Código: {{ c.code }}</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Código de Producto</label>
+      <input class="form-input code-input" [(ngModel)]="form.barcode" readonly>
+      <small class="form-hint" *ngIf="form.category">Prefijo: {{ getCategoryCode(form.category) }} + consecutivo</small>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Nombre del Producto</label>
+      <input class="form-input" [(ngModel)]="form.name" placeholder="Ej: Coca-Cola 350ml">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Precio de Compra ($)</label>
+      <input class="form-input" type="number" [(ngModel)]="form.purchasePrice" placeholder="0" min="0">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Precio de Venta ($)</label>
+      <input class="form-input" type="number" [(ngModel)]="form.salePrice" placeholder="0" min="0">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Stock Inicial</label>
+      <input class="form-input" type="number" [(ngModel)]="form.stock" min="0">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Stock Mínimo (alerta)</label>
+      <input class="form-input" type="number" [(ngModel)]="form.minStock" min="0">
+    </div>
+
+    <div class="form-group span-2">
+      <label class="form-label">Descripción (opcional)</label>
+      <input class="form-input" [(ngModel)]="form.description" placeholder="Detalles del producto...">
+    </div>
+  </div>
+
+  <!-- Margin indicator -->
+  <div class="margin-bar" *ngIf="form.purchasePrice && form.salePrice">
+    <span>Margen de ganancia:</span>
+    <span [class]="margin >= 30 ? 'margin-good' : margin >= 15 ? 'margin-ok' : 'margin-low'">
+      {{ margin | number:'1.1-1' }}% — Ganancia: ${{ (form.salePrice - form.purchasePrice) | number:'1.0-0' }}
+    </span>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn-outline" (click)="cancelForm()">Cancelar</button>
+    <button class="btn-primary" (click)="saveProduct()">
+      {{ editingProduct ? '💾 Guardar Cambios' : '✅ Registrar Producto' }}
+    </button>
+  </div>
+</div>
+
+<!-- ═══ TABLA DE PRODUCTOS ═══ -->
+<div class="table-wrapper neon-card" style="padding:0;animation:none">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Código</th><th>Producto</th><th>Categoría</th><th>Compra</th><th>Venta</th>
+        <th>Stock</th><th>Estado</th><th *ngIf="authService.hasRole('admin')">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let p of products">
+        <td><code class="product-code">{{ p.barcode }}</code></td>
+        <td><strong>{{ p.name }}</strong></td>
+        <td>{{ p.category?.icon }} {{ p.category?.name }}</td>
+        <td>${{ p.purchasePrice | number:'1.0-0' }}</td>
+        <td>${{ p.salePrice | number:'1.0-0' }}</td>
+        <td>
+          <span [class]="p.stock === 0 ? 'badge badge-red' : p.stock <= p.minStock ? 'badge badge-orange' : 'badge badge-green'">
+            {{ p.stock }}
+          </span>
+        </td>
+        <td><span [class]="p.isActive ? 'badge badge-green' : 'badge badge-red'">{{ p.isActive ? 'Activo' : 'Inactivo' }}</span></td>
+        <td *ngIf="authService.hasRole('admin')">
+          <button class="btn-ghost btn-sm" (click)="openEditForm(p)" title="Editar">✏️</button>
+          <button class="btn-ghost btn-sm" (click)="adjustStock(p)" title="Ajustar stock">📦</button>
+          <button class="btn-ghost btn-sm" (click)="deleteProduct(p)" title="Desactivar">🗑️</button>
+        </td>
+      </tr>
+      <tr *ngIf="products.length === 0">
+        <td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay productos registrados</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="flex-between mt-2" *ngIf="totalPages > 1">
+  <span style="font-size:0.85rem;color:var(--text-secondary)">{{ totalProducts }} productos</span>
+  <div style="display:flex;gap:0.25rem">
+    <button class="btn-outline btn-sm" *ngFor="let p of pageArray" [class.btn-primary]="p === currentPage"
+            (click)="goToPage(p)">{{ p }}</button>
+  </div>
+</div>

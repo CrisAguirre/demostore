@@ -1,0 +1,192 @@
+<div class="page-header">
+  <h1>📊 Centro de Inteligencia</h1>
+  <div class="period-btns">
+    <button *ngFor="let p of ['day','week','month','year']"
+            [class]="period===p ? 'btn-primary btn-sm' : 'btn-outline btn-sm'"
+            (click)="setPeriod(p)">
+      {{ p==='day'?'Hoy':p==='week'?'Semana':p==='month'?'Mes':'Año' }}
+    </button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs-bar">
+  <button *ngFor="let t of [{id:'ventas',icon:'💰',label:'Ventas'},{id:'inventario',icon:'📦',label:'Inventario'},{id:'productos',icon:'⭐',label:'Productos'}]"
+          [class]="activeTab===t.id ? 'tab active' : 'tab'" (click)="activeTab=t.id">
+    {{t.icon}} {{t.label}}
+  </button>
+</div>
+
+<!-- ═══════ TAB: VENTAS ═══════ -->
+<div *ngIf="activeTab==='ventas'" class="tab-content">
+  <!-- KPIs -->
+  <div class="grid-4 mb-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-cyan">💰</div>
+      <div><div class="stat-value">{{ formatCurrency(summary.totalRevenue) }}</div><div class="stat-label">Ingresos</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon bg-violet">🧾</div>
+      <div><div class="stat-value">{{ summary.totalTransactions }}</div><div class="stat-label">Transacciones</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon bg-green">🎯</div>
+      <div><div class="stat-value">{{ formatCurrency(summary.averageTicket) }}</div><div class="stat-label">Ticket Promedio</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon bg-orange">📦</div>
+      <div><div class="stat-value">{{ summary.totalItems || 0 }}</div><div class="stat-label">Unidades Vendidas</div></div>
+    </div>
+  </div>
+
+  <!-- Sales Trend Chart -->
+  <div class="neon-card mb-3">
+    <h3 class="chart-title">📈 Tendencia de Ventas</h3>
+    <div class="chart-container bar-chart" *ngIf="summary.salesByDay?.length > 0">
+      <div class="bar-group" *ngFor="let d of summary.salesByDay">
+        <div class="bar-fill" [style.height.%]="(d.total / maxDailyRevenue) * 100"
+             [title]="formatCurrency(d.total) + ' — ' + d.count + ' ventas'">
+          <span class="bar-value">{{ formatCurrency(d.total) }}</span>
+        </div>
+        <span class="bar-label">{{ d._id.substring(5) }}</span>
+      </div>
+    </div>
+    <p *ngIf="!summary.salesByDay?.length" class="empty-msg">Sin datos para el período</p>
+  </div>
+
+  <!-- Pie: Category + Payment -->
+  <div class="grid-2 mb-3">
+    <div class="neon-card">
+      <h3 class="chart-title">🥧 Ventas por Categoría</h3>
+      <div class="pie-wrapper" *ngIf="salesByCategory.length > 0">
+        <svg viewBox="0 0 200 200" class="pie-svg">
+          <path *ngFor="let c of salesByCategory; let i = index"
+                [attr.d]="piePath(salesByCategory, 'revenue', categoryTotal, i)"
+                [attr.fill]="pieColors[i % pieColors.length]" stroke="#151822" stroke-width="1.5"/>
+        </svg>
+        <div class="pie-legend">
+          <div *ngFor="let c of salesByCategory; let i = index" class="legend-item">
+            <span class="legend-dot" [style.background]="pieColors[i % pieColors.length]"></span>
+            <span class="legend-label">{{ c.icon }} {{ c.name }}</span>
+            <span class="legend-value">{{ formatCurrency(c.revenue) }}</span>
+          </div>
+        </div>
+      </div>
+      <p *ngIf="salesByCategory.length===0" class="empty-msg">Sin datos</p>
+    </div>
+
+    <div class="neon-card-violet">
+      <h3 class="chart-title">💳 Métodos de Pago</h3>
+      <div class="pie-wrapper" *ngIf="salesByPayment.length > 0">
+        <svg viewBox="0 0 200 200" class="pie-svg">
+          <path *ngFor="let p of salesByPayment; let i = index"
+                [attr.d]="piePath(salesByPayment, 'totalRevenue', paymentTotal, i)"
+                [attr.fill]="pieColors[i % pieColors.length]" stroke="#151822" stroke-width="1.5"/>
+        </svg>
+        <div class="pie-legend">
+          <div *ngFor="let p of salesByPayment; let i = index" class="legend-item">
+            <span class="legend-dot" [style.background]="pieColors[i % pieColors.length]"></span>
+            <span class="legend-label">{{ paymentLabel(p._id) }}</span>
+            <span class="legend-value">{{ formatCurrency(p.totalRevenue) }}</span>
+          </div>
+        </div>
+      </div>
+      <p *ngIf="salesByPayment.length===0" class="empty-msg">Sin datos</p>
+    </div>
+  </div>
+
+  <!-- Hourly Heatmap -->
+  <div class="neon-card mb-3">
+    <h3 class="chart-title">⏰ Horas Pico de Venta</h3>
+    <div class="hourly-grid" *ngIf="salesByHour.length > 0">
+      <div *ngFor="let h of salesByHour" class="hour-cell"
+           [style.opacity]="0.15 + (h.count / maxHourly) * 0.85"
+           [title]="h.label + ': ' + h.count + ' ventas — ' + formatCurrency(h.totalRevenue)">
+        <span class="hour-num">{{ h.label.substring(0,2) }}</span>
+        <span class="hour-count">{{ h.count }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: INVENTARIO ═══════ -->
+<div *ngIf="activeTab==='inventario'" class="tab-content">
+  <div class="grid-4 mb-3">
+    <div class="stat-card"><div class="stat-icon bg-cyan">📦</div><div><div class="stat-value">{{ inventory.totalProducts }}</div><div class="stat-label">Productos</div></div></div>
+    <div class="stat-card"><div class="stat-icon bg-violet">#️⃣</div><div><div class="stat-value">{{ inventory.totalUnits | number }}</div><div class="stat-label">Unidades</div></div></div>
+    <div class="stat-card"><div class="stat-icon bg-green">💎</div><div><div class="stat-value">{{ formatCurrency(inventory.totalSaleValue) }}</div><div class="stat-label">Valor Venta</div></div></div>
+    <div class="stat-card"><div class="stat-icon bg-orange">📈</div><div><div class="stat-value">{{ inventory.marginPercent }}%</div><div class="stat-label">Margen Global</div></div></div>
+  </div>
+
+  <div class="grid-2 mb-3">
+    <div class="neon-card">
+      <h3 class="chart-title">🏷️ Valor por Categoría</h3>
+      <div *ngFor="let c of inventory.byCategory" class="progress-row">
+        <span class="prog-label">{{ c.name }}</span>
+        <div class="prog-bar-bg">
+          <div class="prog-bar-fill" [style.width.%]="(c.saleValue / inventory.totalSaleValue) * 100"></div>
+        </div>
+        <span class="prog-value">{{ formatCurrency(c.saleValue) }}</span>
+      </div>
+    </div>
+
+    <div class="neon-card-violet">
+      <h3 class="chart-title">⚠️ Estado del Stock</h3>
+      <div class="stock-donuts">
+        <div class="mini-stat ok"><span class="mini-val">{{ inventory.totalProducts - inventory.lowStockCount - inventory.outOfStockCount }}</span><span class="mini-lbl">OK</span></div>
+        <div class="mini-stat warn"><span class="mini-val">{{ inventory.lowStockCount }}</span><span class="mini-lbl">Bajo</span></div>
+        <div class="mini-stat danger"><span class="mini-val">{{ inventory.outOfStockCount }}</span><span class="mini-lbl">Agotado</span></div>
+      </div>
+      <div class="profit-card">
+        <span>Ganancia Potencial</span>
+        <strong>{{ formatCurrency(inventory.potentialProfit) }}</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: PRODUCTOS ═══════ -->
+<div *ngIf="activeTab==='productos'" class="tab-content">
+  <div class="grid-2 mb-3">
+    <div class="neon-card">
+      <h3 class="chart-title">⭐ Top 10 Productos</h3>
+      <div *ngFor="let p of topProducts; let i = index" class="top-row">
+        <span class="top-rank">{{ i + 1 }}</span>
+        <span class="top-name">{{ p.name }}</span>
+        <span class="badge badge-cyan">{{ p.totalQuantity }} uds</span>
+        <span class="top-revenue">{{ formatCurrency(p.totalRevenue) }}</span>
+      </div>
+      <p *ngIf="topProducts.length===0" class="empty-msg">Sin datos de ventas</p>
+    </div>
+
+    <div class="neon-card-violet">
+      <h3 class="chart-title">🐌 Sin Movimiento (30 días)</h3>
+      <div *ngFor="let p of lowRotation" class="top-row">
+        <span class="top-name">{{ p.name }}</span>
+        <span class="badge badge-orange">Stock: {{ p.stock }}</span>
+      </div>
+      <p *ngIf="lowRotation.length===0" class="empty-msg">¡Todos los productos se mueven! 🎉</p>
+    </div>
+  </div>
+
+  <div class="neon-card mb-3">
+    <h3 class="chart-title">💹 Márgenes de Ganancia</h3>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead><tr>
+          <th>Producto</th><th>Categoría</th><th>Compra</th><th>Venta</th><th>Margen</th><th>%</th>
+        </tr></thead>
+        <tbody>
+          <tr *ngFor="let m of profitMargins">
+            <td>{{ m.name }}</td>
+            <td>{{ m.category }}</td>
+            <td>{{ formatCurrency(m.purchasePrice) }}</td>
+            <td>{{ formatCurrency(m.salePrice) }}</td>
+            <td style="color:var(--neon-green);font-weight:700">{{ formatCurrency(m.margin) }}</td>
+            <td><span class="badge" [ngClass]="m.marginPercent >= 30 ? 'badge-green' : m.marginPercent >= 15 ? 'badge-orange' : 'badge-red'">{{ m.marginPercent }}%</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
