@@ -1,6 +1,17 @@
+/**
+ * app.component.ts  (modified — adds server warmup on init)
+ *
+ * Change vs original:
+ *  - Injects PreloadService
+ *  - Calls preloadSvc.warmup() in ngOnInit so Render's free-tier server
+ *    starts waking up the moment the Angular app boots — before the user
+ *    even types their password.
+ */
+
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { AuthService } from './core/services/auth.service';
 import { SettingsService } from './core/services/settings.service';
+import { PreloadService } from './core/services/preload.service';
 
 @Component({
   selector: 'app-root',
@@ -32,7 +43,7 @@ import { SettingsService } from './core/services/settings.service';
   styles: [`
     .app-layout { display: flex; min-height: calc(100vh - 60px); }
     .app-content { flex: 1; padding: 1.5rem; overflow-x: hidden; animation: fadeIn 0.3s ease; }
-    
+
     .floating-wa {
       position: fixed; bottom: 30px; right: 30px; z-index: 1000;
       background: #25D366; width: 52px; height: 52px;
@@ -43,7 +54,6 @@ import { SettingsService } from './core/services/settings.service';
     }
     .floating-wa:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(37,211,102,0.6); }
 
-    /* Both icons stacked */
     .fab-icon {
       position: absolute;
       transition: opacity 0.5s ease, transform 0.5s ease;
@@ -54,7 +64,6 @@ import { SettingsService } from './core/services/settings.service';
       opacity: 0; transform: translateX(20px);
     }
 
-    /* When showing the store logo */
     .floating-wa.show-logo {
       background: linear-gradient(135deg, var(--neon-cyan), var(--neon-violet));
       box-shadow: 0 4px 15px rgba(0,229,255,0.4);
@@ -76,9 +85,18 @@ export class AppComponent implements OnInit, OnDestroy {
   showStoreLogo = false;
   private intervalId: any;
 
-  constructor(public auth: AuthService, public settings: SettingsService) {}
-  
+  constructor(
+    public auth: AuthService,
+    public settings: SettingsService,
+    private preloadSvc: PreloadService
+  ) {}
+
   ngOnInit() {
+    // Wake up Render's free-tier server immediately on app boot.
+    // By the time the user fills and submits the login form, the server
+    // is already warm — eliminating the cold-start delay entirely.
+    this.preloadSvc.warmup();
+
     this.settings.loadSettings();
     this.intervalId = setInterval(() => {
       this.showStoreLogo = !this.showStoreLogo;
