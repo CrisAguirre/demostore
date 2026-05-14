@@ -1,3 +1,4 @@
+// src/app/shared/components/sidebar/sidebar.component.ts  — REEMPLAZA el original
 import { Component } from '@angular/core';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -9,11 +10,15 @@ import { AuthService } from '../../../core/services/auth.service';
         {{ collapsed ? '☰' : '✕' }}
       </button>
       <nav class="sidebar-nav">
-        <a *ngFor="let item of menuItems" [routerLink]="item.route" routerLinkActive="active"
-           class="nav-item" [title]="item.label">
-          <span class="nav-icon">{{ item.icon }}</span>
-          <span class="nav-label" *ngIf="!collapsed">{{ item.label }}</span>
-        </a>
+        <ng-container *ngFor="let item of menuItems">
+          <!-- Separador de sección -->
+          <div class="section-divider" *ngIf="item.divider && !collapsed">{{ item.divider }}</div>
+          <a *ngIf="!item.divider" [routerLink]="item.route" routerLinkActive="active"
+             class="nav-item" [title]="item.label">
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label" *ngIf="!collapsed">{{ item.label }}</span>
+          </a>
+        </ng-container>
       </nav>
     </aside>
   `,
@@ -36,6 +41,11 @@ import { AuthService } from '../../../core/services/auth.service';
     }
     .toggle-btn:hover { background: var(--bg-input); }
     .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+    .section-divider {
+      font-size: .65rem; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--text-secondary); padding: .9rem 1.5rem .3rem;
+      opacity: .6;
+    }
     .nav-item {
       display: flex; align-items: center; gap: 0.75rem;
       padding: 0.65rem 1rem; margin: 0 0.5rem;
@@ -43,13 +53,10 @@ import { AuthService } from '../../../core/services/auth.service';
       color: var(--text-secondary); transition: all 0.15s;
       white-space: nowrap; overflow: hidden;
     }
-    .nav-item:hover {
-      background: rgba(0,229,255,0.06); color: var(--text-primary);
-    }
+    .nav-item:hover { background: rgba(0,229,255,0.06); color: var(--text-primary); }
     .nav-item.active {
       background: rgba(0,229,255,0.1); color: #00B8D4;
-      font-weight: 600;
-      border-left: 3px solid var(--neon-cyan);
+      font-weight: 600; border-left: 3px solid var(--neon-cyan);
     }
     .nav-icon { font-size: 1.2rem; min-width: 24px; text-align: center; }
     .nav-label { transition: opacity 0.2s; }
@@ -59,6 +66,7 @@ import { AuthService } from '../../../core/services/auth.service';
       .sidebar { width: 64px; flex-shrink: 0; }
       .desktop-only { display: none; }
       .nav-label { display: none; }
+      .section-divider { display: none; }
       .nav-item { justify-content: center; padding: 0.85rem 0; margin: 0.15rem 0.25rem; }
       .nav-icon { font-size: 1.4rem; }
       .nav-item.active { border-left: none; border-bottom: 3px solid var(--neon-cyan); border-radius: 6px; }
@@ -67,33 +75,47 @@ import { AuthService } from '../../../core/services/auth.service';
 })
 export class SidebarComponent {
   collapsed = false;
-  menuItems: { icon: string; label: string; route: string }[] = [];
+  menuItems: { icon?: string; label?: string; route?: string; divider?: string }[] = [];
 
   constructor(private auth: AuthService) {
     const role = this.auth.currentUser?.role;
 
     if (role === 'cliente') {
       this.menuItems = [
-        { icon: '📊', label: 'Mis Compras', route: '/dashboard' },
+        { icon: '📊', label: 'Mis Compras',    route: '/dashboard' },
         { icon: '🌐', label: 'Tienda Virtual', route: '/storefront' },
-        { icon: '⚙️', label: 'Mi Perfil', route: '/settings' }
+        { icon: '⚙️', label: 'Mi Perfil',      route: '/settings' }
       ];
     } else if (role === 'invitado') {
       this.menuItems = [
-        { icon: '📊', label: 'Mis Compras', route: '/dashboard' },
+        { icon: '📊', label: 'Mis Compras',    route: '/dashboard' },
         { icon: '🌐', label: 'Tienda Virtual', route: '/storefront' }
       ];
     } else {
       this.menuItems = [
-        { icon: '📊', label: 'Dashboard', route: '/dashboard' },
-        { icon: '📦', label: 'Inventario', route: '/inventory' },
-        { icon: '🛒', label: 'Punto de Venta', route: '/pos' },
-        { icon: '💰', label: 'Caja', route: '/cash' },
+        // Operaciones diarias
+        { divider: 'Operaciones' },
+        { icon: '📊', label: 'Dashboard',       route: '/dashboard' },
+        { icon: '📦', label: 'Inventario',      route: '/inventory' },
+        { icon: '🛒', label: 'Punto de Venta',  route: '/pos' },
+        { icon: '💰', label: 'Caja',            route: '/cash' },
       ];
       if (role === 'admin') {
         this.menuItems.push(
-          { icon: '📈', label: 'Reportes', route: '/reports' },
-          { icon: '🔔', label: 'Alertas', route: '/alerts' },
+          // Compras y proveedores
+          { divider: 'Compras' },
+          { icon: '🏭', label: 'Proveedores',   route: '/suppliers' },
+          { icon: '🛍️', label: 'Compras',       route: '/purchases' },
+          // Gastos
+          { divider: 'Gastos' },
+          { icon: '💸', label: 'Gastos Operativos', route: '/expenses' },
+          // Inteligencia
+          { divider: 'Inteligencia' },
+          { icon: '🧠', label: 'Centro Financiero', route: '/finance' },
+          { icon: '📈', label: 'Reportes',      route: '/reports' },
+          { icon: '🔔', label: 'Alertas',       route: '/alerts' },
+          // Configuración
+          { divider: 'Sistema' },
           { icon: '🌐', label: 'Tienda Virtual', route: '/storefront' },
           { icon: '⚙️', label: 'Configuración', route: '/settings' }
         );
