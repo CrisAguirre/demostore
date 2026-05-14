@@ -1,15 +1,8 @@
 /**
- * api.service.ts  (modified — cache-aware)
+ * api.service.ts  — cache-aware + módulos financieros
  *
- * Every GET method now checks PreloadService's in-memory cache first.
- * If the data is there and still fresh → returns it instantly as an Observable
- * (zero HTTP calls, zero latency).
- * If not → makes the HTTP call, stores the result, and returns it normally.
- *
- * Every mutation (POST / PUT / PATCH / DELETE) invalidates the relevant
- * cache keys so the next read always gets fresh data.
- *
- * No component needs to change at all — the interface is 100% identical.
+ * Incluye: productos, categorías, ventas, caja, alertas, reportes,
+ * storefront, settings, usuarios  +  proveedores, compras, gastos, finanzas.
  */
 
 import { Injectable } from '@angular/core';
@@ -18,16 +11,18 @@ import { Observable, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PreloadService } from './preload.service';
 
-// ── TTLs for ad-hoc (non-preloaded) GET calls ────────────────────────────────
 const TTL = {
-  products:     5  * 60 * 1000,
-  categories:   10 * 60 * 1000,
-  alerts:       2  * 60 * 1000,
-  sales:        5  * 60 * 1000,
-  reports:      5  * 60 * 1000,
-  currentCash:  3  * 60 * 1000,
-  settings:     30 * 60 * 1000,
-  storefront:   5  * 60 * 1000,
+  products:          5  * 60 * 1000,
+  categories:        10 * 60 * 1000,
+  alerts:            2  * 60 * 1000,
+  sales:             5  * 60 * 1000,
+  reports:           5  * 60 * 1000,
+  currentCash:       3  * 60 * 1000,
+  settings:          30 * 60 * 1000,
+  storefront:        5  * 60 * 1000,
+  suppliers:         5  * 60 * 1000,
+  expenseCategories: 60 * 60 * 1000,
+  finance:           3  * 60 * 1000,
 } as const;
 
 @Injectable({ providedIn: 'root' })
@@ -41,49 +36,29 @@ export class ApiService {
 
   // ── Cache helpers ─────────────────────────────────────────────────────────
 
-  /** Builds a deterministic cache key from an endpoint + params object */
   private key(endpoint: string, params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) return endpoint;
-    // Sort keys so { limit:200, active:'true' } === { active:'true', limit:200 }
     const sorted = Object.keys(params)
       .sort()
       .reduce((acc, k) => ({ ...acc, [k]: params[k] }), {});
     return `${endpoint}:${JSON.stringify(sorted)}`;
   }
 
-  /**
-   * Try cache first; on miss make the HTTP GET and store the result.
-   */
-  private cachedGet<T>(
-    cacheKey: string,
-    request: Observable<T>,
-    ttl: number
-  ): Observable<T> {
+  private cachedGet<T>(cacheKey: string, request: Observable<T>, ttl: number): Observable<T> {
     const cached = this.preload.get<T>(cacheKey);
-    if (cached !== null) {
-      return of(cached);          // ← instant, no network
-    }
-    return request.pipe(
-      tap(data => this.preload.set(cacheKey, data, ttl))
-    );
+    if (cached !== null) return of(cached);
+    return request.pipe(tap(data => this.preload.set(cacheKey, data, ttl)));
   }
 
   // ── Products ──────────────────────────────────────────────────────────────
 
   getProducts(params?: any): Observable<any> {
     const k = this.key('products', params);
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/products`, { params }),
-      TTL.products
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/products`, { params }), TTL.products);
   }
 
   getProduct(id: string): Observable<any> {
-    return this.cachedGet(
-      `product:${id}`,
-      this.http.get(`${this.baseUrl}/products/${id}`),
-      TTL.products
-    );
+    return this.cachedGet(`product:${id}`, this.http.get(`${this.baseUrl}/products/${id}`), TTL.products);
   }
 
   createProduct(data: any): Observable<any> {
@@ -94,19 +69,13 @@ export class ApiService {
 
   updateProduct(id: string, data: any): Observable<any> {
     return this.http.put(`${this.baseUrl}/products/${id}`, data).pipe(
-      tap(() => {
-        this.preload.invalidatePrefix('products');
-        this.preload.invalidate(`product:${id}`);
-      })
+      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate(`product:${id}`); })
     );
   }
 
   deleteProduct(id: string): Observable<any> {
     return this.http.delete(`${this.baseUrl}/products/${id}`).pipe(
-      tap(() => {
-        this.preload.invalidatePrefix('products');
-        this.preload.invalidate(`product:${id}`);
-      })
+      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate(`product:${id}`); })
     );
   }
 
@@ -115,7 +84,7 @@ export class ApiService {
       tap(() => {
         this.preload.invalidatePrefix('products');
         this.preload.invalidate(`product:${id}`);
-        this.preload.invalidatePrefix('alerts');      // new stock alerts may appear
+        this.preload.invalidatePrefix('alerts');
         this.preload.invalidatePrefix('sales-summary');
       })
     );
@@ -128,10 +97,7 @@ export class ApiService {
   // ── Categories ────────────────────────────────────────────────────────────
 
   getCategories(): Observable<any> {
-    return this.cachedGet('categories',
-      this.http.get(`${this.baseUrl}/categories`),
-      TTL.categories
-    );
+    return this.cachedGet('categories', this.http.get(`${this.baseUrl}/categories`), TTL.categories);
   }
 
   createCategory(data: any): Observable<any> {
@@ -157,30 +123,23 @@ export class ApiService {
   createSale(data: any): Observable<any> {
     return this.http.post(`${this.baseUrl}/sales`, data).pipe(
       tap(() => {
-        // A sale changes: stock, sales summaries, top products, alerts, cash
         this.preload.invalidatePrefix('products');
         this.preload.invalidatePrefix('sales-summary');
         this.preload.invalidatePrefix('top-products');
         this.preload.invalidatePrefix('alerts');
         this.preload.invalidate('current-cash');
+        this.preload.invalidatePrefix('finance');
       })
     );
   }
 
   getSales(params?: any): Observable<any> {
     const k = this.key('sales', params);
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/sales`, { params }),
-      TTL.sales
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/sales`, { params }), TTL.sales);
   }
 
   getSale(id: string): Observable<any> {
-    return this.cachedGet(
-      `sale:${id}`,
-      this.http.get(`${this.baseUrl}/sales/${id}`),
-      TTL.sales
-    );
+    return this.cachedGet(`sale:${id}`, this.http.get(`${this.baseUrl}/sales/${id}`), TTL.sales);
   }
 
   // ── Cash Closings ─────────────────────────────────────────────────────────
@@ -202,20 +161,14 @@ export class ApiService {
   }
 
   getCurrentCash(): Observable<any> {
-    return this.cachedGet('current-cash',
-      this.http.get(`${this.baseUrl}/cash-closings/current`),
-      TTL.currentCash
-    );
+    return this.cachedGet('current-cash', this.http.get(`${this.baseUrl}/cash-closings/current`), TTL.currentCash);
   }
 
   // ── Alerts ────────────────────────────────────────────────────────────────
 
   getAlerts(params?: any): Observable<any> {
     const k = this.key('alerts', params);
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/alerts`, { params }),
-      TTL.alerts
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/alerts`, { params }), TTL.alerts);
   }
 
   markAlertRead(id: string): Observable<any> {
@@ -241,84 +194,54 @@ export class ApiService {
   getSalesSummary(period?: string): Observable<any> {
     const k = period ? `sales-summary:${period}` : 'sales-summary:month';
     const params: any = period ? { period } : undefined;
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/reports/sales-summary`, { params }),
-      TTL.reports
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/reports/sales-summary`, { params }), TTL.reports);
   }
 
   getTopProducts(limit?: number): Observable<any> {
     const k = `top-products:${limit ?? 10}`;
     const params: any = limit ? { limit: limit.toString() } : undefined;
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/reports/top-products`, { params }),
-      TTL.reports
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/reports/top-products`, { params }), TTL.reports);
   }
 
   getLowRotation(): Observable<any> {
-    return this.cachedGet('low-rotation',
-      this.http.get(`${this.baseUrl}/reports/low-rotation`),
-      TTL.reports
-    );
+    return this.cachedGet('low-rotation', this.http.get(`${this.baseUrl}/reports/low-rotation`), TTL.reports);
   }
 
   getSalesByCategory(period?: string): Observable<any> {
     const k = `sales-by-category:${period ?? 'month'}`;
     const params: any = period ? { period } : undefined;
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/reports/sales-by-category`, { params }),
-      TTL.reports
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/reports/sales-by-category`, { params }), TTL.reports);
   }
 
   getSalesByPayment(period?: string): Observable<any> {
     const k = `sales-by-payment:${period ?? 'month'}`;
     const params: any = period ? { period } : undefined;
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/reports/sales-by-payment`, { params }),
-      TTL.reports
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/reports/sales-by-payment`, { params }), TTL.reports);
   }
 
   getSalesByHour(period?: string): Observable<any> {
     const k = `sales-by-hour:${period ?? 'month'}`;
     const params: any = period ? { period } : undefined;
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/reports/sales-by-hour`, { params }),
-      TTL.reports
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/reports/sales-by-hour`, { params }), TTL.reports);
   }
 
   getInventoryValuation(): Observable<any> {
-    return this.cachedGet('inventory-valuation',
-      this.http.get(`${this.baseUrl}/reports/inventory-valuation`),
-      TTL.reports
-    );
+    return this.cachedGet('inventory-valuation', this.http.get(`${this.baseUrl}/reports/inventory-valuation`), TTL.reports);
   }
 
   getProfitMargins(): Observable<any> {
-    return this.cachedGet('profit-margins',
-      this.http.get(`${this.baseUrl}/reports/profit-margins`),
-      TTL.reports
-    );
+    return this.cachedGet('profit-margins', this.http.get(`${this.baseUrl}/reports/profit-margins`), TTL.reports);
   }
 
   // ── Storefront (Public) ───────────────────────────────────────────────────
 
   getStorefrontProducts(params?: any): Observable<any> {
     const k = this.key('storefront-products', params);
-    return this.cachedGet(k,
-      this.http.get(`${this.baseUrl}/storefront/products`, { params }),
-      TTL.storefront
-    );
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/storefront/products`, { params }), TTL.storefront);
   }
 
   getStorefrontCategories(): Observable<any> {
-    return this.cachedGet('storefront-categories',
-      this.http.get(`${this.baseUrl}/storefront/categories`),
-      TTL.storefront
-    );
+    return this.cachedGet('storefront-categories', this.http.get(`${this.baseUrl}/storefront/categories`), TTL.storefront);
   }
 
   checkAvailability(id: string): Observable<any> {
@@ -328,10 +251,7 @@ export class ApiService {
   // ── Settings ──────────────────────────────────────────────────────────────
 
   getSettings(): Observable<any> {
-    return this.cachedGet('settings',
-      this.http.get(`${this.baseUrl}/settings`),
-      TTL.settings
-    );
+    return this.cachedGet('settings', this.http.get(`${this.baseUrl}/settings`), TTL.settings);
   }
 
   updateSettings(data: FormData): Observable<any> {
@@ -348,5 +268,112 @@ export class ApiService {
 
   changePassword(data: any): Observable<any> {
     return this.http.put(`${this.baseUrl}/auth/change-password`, data);
+  }
+
+  // ── Suppliers ────────────────────────────────────────────────────────────
+
+  getSuppliers(params?: any): Observable<any> {
+    const k = this.key('suppliers', params);
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/suppliers`, { params }), TTL.suppliers);
+  }
+
+  getSupplier(id: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/suppliers/${id}`);
+  }
+
+  createSupplier(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/suppliers`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('suppliers'))
+    );
+  }
+
+  updateSupplier(id: string, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/suppliers/${id}`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('suppliers'))
+    );
+  }
+
+  deleteSupplier(id: string): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/suppliers/${id}`).pipe(
+      tap(() => this.preload.invalidatePrefix('suppliers'))
+    );
+  }
+
+  // ── Purchases ─────────────────────────────────────────────────────────────
+
+  getPurchases(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/purchases`, { params });
+  }
+
+  getPurchase(id: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/purchases/${id}`);
+  }
+
+  createPurchase(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/purchases`, data).pipe(
+      tap(() => {
+        this.preload.invalidatePrefix('products');
+        this.preload.invalidatePrefix('finance');
+        this.preload.invalidatePrefix('inventory-valuation');
+      })
+    );
+  }
+
+  updatePurchaseStatus(id: string, status: string): Observable<any> {
+    return this.http.patch(`${this.baseUrl}/purchases/${id}/status`, { status }).pipe(
+      tap(() => this.preload.invalidatePrefix('products'))
+    );
+  }
+
+  // ── Expenses ──────────────────────────────────────────────────────────────
+
+  getExpenseCategories(): Observable<any> {
+    return this.cachedGet(
+      'expense-categories',
+      this.http.get(`${this.baseUrl}/expenses/categories`),
+      TTL.expenseCategories
+    );
+  }
+
+  getExpenses(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/expenses`, { params });
+  }
+
+  createExpense(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/expenses`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('finance'))
+    );
+  }
+
+  updateExpense(id: string, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/expenses/${id}`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('finance'))
+    );
+  }
+
+  deleteExpense(id: string): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/expenses/${id}`).pipe(
+      tap(() => this.preload.invalidatePrefix('finance'))
+    );
+  }
+
+  // ── Finance / Centro de Inteligencia Financiera ───────────────────────────
+
+  getFinancialSummary(period?: string): Observable<any> {
+    const k = `finance-summary:${period ?? 'month'}`;
+    const params: any = period ? { period } : undefined;
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/finance/summary`, { params }), TTL.finance);
+  }
+
+  getCashFlow(period?: string): Observable<any> {
+    const k = `finance-cashflow:${period ?? 'month'}`;
+    const params: any = period ? { period } : undefined;
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/finance/cashflow`, { params }), TTL.finance);
+  }
+
+  getMonthlyPL(months?: number): Observable<any> {
+    const k = `finance-monthly-pl:${months ?? 6}`;
+    const params: any = months ? { months: months.toString() } : undefined;
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/finance/monthly-pl`, { params }), TTL.finance);
   }
 }
