@@ -10,6 +10,7 @@ export interface AuthResponse { user: User; accessToken: string; refreshToken: s
 
 export interface Product {
   _id: string; name: string; barcode: string; category: Category | string;
+  supplier?: Supplier | string | any;
   purchasePrice: number; salePrice: number; stock: number; minStock: number;
   imageUrl: string; description: string; isActive: boolean; createdAt: string;
 }
@@ -43,7 +44,7 @@ export interface PaginatedResponse<T> {
 // ── NUEVAS INTERFACES ────────────────────────────────────────────────────────
 
 export interface Supplier {
-  _id: string; name: string; contactName: string; phone: string;
+  _id: string; name: string; code: string; categories: any[]; contactName: string; phone: string;
   email: string; address: string; nit: string; notes: string; isActive: boolean;
   createdAt: string;
 }
@@ -89,4 +90,32 @@ export interface FinancialSummary {
 export interface MonthlyPL {
   month: string; label: string;
   revenue: number; expenses: number; purchases: number; profit: number; salesCount: number;
+}
+
+// ── INTERFACES DEUDORES ─────────────────────────────────────────────────────
+
+export type DebtorTransactionType = 'abono' | 'pago_completo' | 'aumento_credito' | 'nueva_deuda';
+
+export interface DebtorTransaction {
+  _id: string;
+  type: DebtorTransactionType;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  notes: string;
+  createdAt: string;
+}
+
+export interface Debtor {
+  _id: string;
+  code: string;
+  name: string;
+  address: string;
+  phone: string;
+  totalDebt: number;
+  creditLimit: number;
+  transactions: DebtorTransaction[];
+  lastPaymentDate: string | null;
+  isActive: boolean;
+  createdAt: string;
 }

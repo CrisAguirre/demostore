@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { ApiService } from '@core/services/api.service';
 import Swal from 'sweetalert2';
 
@@ -8,9 +8,24 @@ import Swal from 'sweetalert2';
     <div class="pos-layout">
       <!-- Panel Productos -->
       <div class="pos-products">
-        <div class="pos-search">
+        <div class="pos-search" style="display: flex; gap: 0.5rem; align-items: center; position: relative;">
           <input class="form-input" placeholder="🔍 Buscar producto o escanear código..."
-                 [(ngModel)]="searchTerm" (input)="filterProducts()" #searchInput>
+                 [(ngModel)]="searchTerm" (input)="filterProducts()" #searchInput style="flex: 1;">
+                 
+          <!-- Multiselect Proveedores -->
+          <div class="dropdown-container" style="position: relative;">
+            <button class="btn-outline" (click)="showSupplierDropdown = !showSupplierDropdown; $event.stopPropagation()" style="display:flex;align-items:center;gap:0.5rem; white-space: nowrap;">
+              🏢 Proveedores
+              <span class="badge badge-cyan" *ngIf="filterSuppliers.length > 0">{{ filterSuppliers.length }}</span>
+            </button>
+            <div *ngIf="showSupplierDropdown" class="dropdown-menu neon-card" style="position:absolute; top:100%; right:0; mt-1; min-width: 200px; z-index: 100; max-height: 250px; overflow-y: auto; padding: 0.5rem; margin-top: 0.5rem; background: var(--bg-card); border: 1px solid var(--bg-input);">
+              <div *ngFor="let s of suppliers" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; cursor: pointer; color: var(--text-primary);" (click)="toggleSupplier(s._id, $event)">
+                <input type="checkbox" [checked]="isSupplierSelected(s._id)" style="cursor: pointer;" (click)="$event.stopPropagation(); toggleSupplier(s._id, $event)">
+                <span>{{ s.name }}</span>
+              </div>
+              <div *ngIf="suppliers.length === 0" style="text-align:center;color:var(--text-muted);font-size:0.8rem">No hay proveedores</div>
+            </div>
+          </div>
         </div>
         <div class="pos-categories">
           <button class="cat-btn" [class.active]="!selectedCategory" (click)="selectedCategory='';filterProducts()">Todos</button>
@@ -76,8 +91,8 @@ import Swal from 'sweetalert2';
     .pos-layout { display: grid; grid-template-columns: 1fr 360px; gap: 1rem; min-height: calc(100vh - 100px); }
     .pos-search { margin-bottom: 0.75rem; }
     .pos-categories {
-      display: flex; gap: 0.375rem; overflow-x: auto; padding-bottom: 0.5rem;
-      margin-bottom: 0.75rem; scrollbar-width: none;
+      display: flex; gap: 0.375rem; flex-wrap: wrap; padding-bottom: 0.5rem;
+      margin-bottom: 0.75rem;
     }
     .cat-btn {
       padding: 0.375rem 0.75rem; border-radius: 20px; border: 1px solid var(--bg-input);
@@ -128,9 +143,12 @@ export class PosComponent implements OnInit {
   products: any[] = [];
   filteredProducts: any[] = [];
   categories: any[] = [];
+  suppliers: any[] = [];
   cart: any[] = [];
   searchTerm = '';
   selectedCategory = '';
+  filterSuppliers: string[] = [];
+  showSupplierDropdown = false;
   paymentMethod = 'efectivo';
   processing = false;
 
@@ -141,20 +159,58 @@ export class PosComponent implements OnInit {
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
-    this.api.getProducts({ limit: 200, active: 'true' }).subscribe({
-      next: (res: any) => { this.products = res.products; this.filteredProducts = [...this.products]; }
+    this.api.getAllProducts().subscribe({
+      next: (res: any) => { 
+        this.products = res.products.filter((p: any) => p.isActive !== false); 
+        this.filteredProducts = [...this.products]; 
+      }
     });
     this.api.getCategories().subscribe({ next: (cats: any) => this.categories = cats });
+    this.api.getSuppliers({ active: 'true' }).subscribe({ next: (sups: any) => this.suppliers = sups });
+  }
+
+  @HostListener('document:click')
+  onDocumentClick() {
+    this.showSupplierDropdown = false;
+  }
+
+  toggleSupplier(supplierId: string, event: Event): void {
+    event.stopPropagation();
+    const index = this.filterSuppliers.indexOf(supplierId);
+    if (index > -1) {
+      this.filterSuppliers.splice(index, 1);
+    } else {
+      this.filterSuppliers.push(supplierId);
+    }
+    this.filterProducts();
+  }
+
+  isSupplierSelected(supplierId: string): boolean {
+    return this.filterSuppliers.includes(supplierId);
+  }
+
+  normalizeString(str: string): string {
+    return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : '';
   }
 
   filterProducts(): void {
+    const searchTerms = this.normalizeString(this.searchTerm).split(' ').filter(t => t.length > 0);
+    
     this.filteredProducts = this.products.filter(p => {
-      const matchSearch = !this.searchTerm ||
-        p.name.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        p.barcode?.includes(this.searchTerm);
+      const pName = this.normalizeString(p.name);
+      const pBarcode = p.barcode ? p.barcode.toLowerCase() : '';
+      
+      const matchSearch = searchTerms.length === 0 || searchTerms.every(term => 
+        pName.includes(term) || pBarcode.includes(term)
+      );
+
       const matchCat = !this.selectedCategory ||
         (p.category?._id || p.category) === this.selectedCategory;
-      return matchSearch && matchCat;
+        
+      const matchSupplier = this.filterSuppliers.length === 0 || 
+        this.filterSuppliers.includes(p.supplier?._id || p.supplier);
+
+      return matchSearch && matchCat && matchSupplier;
     });
   }
 

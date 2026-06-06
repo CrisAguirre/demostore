@@ -1,82 +1,31 @@
 <div class="page-header">
   <h1>📦 Inventario</h1>
-  <div class="header-actions">
-    <select class="form-input filter-select" [(ngModel)]="filterCategory" (change)="onFilterCategory()">
-      <option value="">Todas las categorías</option>
-      <option *ngFor="let c of categories" [value]="c._id">{{ c.icon }} {{ c.name }} ({{ c.code }})</option>
-    </select>
-    <input class="form-input search-input" placeholder="🔍 Buscar producto..." [(ngModel)]="searchTerm" (input)="onSearch()">
+  <div class="header-actions" style="display: flex; gap: 0.5rem; align-items: center; position: relative;">
+    <input class="form-input search-input" placeholder="🔍 Buscar por nombre o código..." [(ngModel)]="searchTerm" (ngModelChange)="onSearch()">
+    
+    <!-- Multiselect Proveedores -->
+    <div class="dropdown-container" style="position: relative;">
+      <button class="btn-outline" (click)="showSupplierDropdown = !showSupplierDropdown; $event.stopPropagation()" style="display:flex;align-items:center;gap:0.5rem;">
+        🏢 Proveedores
+        <span class="badge badge-cyan" *ngIf="filterSuppliers.length > 0">{{ filterSuppliers.length }}</span>
+      </button>
+      <div *ngIf="showSupplierDropdown" class="dropdown-menu neon-card" style="position:absolute; top:100%; right:0; mt-1; min-width: 200px; z-index: 100; max-height: 250px; overflow-y: auto; padding: 0.5rem; margin-top: 0.5rem; background: var(--bg-card); border: 1px solid var(--bg-input);">
+        <div *ngFor="let s of suppliers" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; cursor: pointer; color: var(--text-primary);" (click)="toggleSupplier(s._id, $event)">
+          <input type="checkbox" [checked]="isSupplierSelected(s._id)" style="pointer-events: none;">
+          <span>{{ s.name }}</span>
+        </div>
+        <div *ngIf="suppliers.length === 0" style="text-align:center;color:var(--text-muted);font-size:0.8rem">No hay proveedores</div>
+      </div>
+    </div>
+
     <button class="btn-primary" (click)="openNewForm()" *ngIf="authService.hasRole('admin')">+ Nuevo Producto</button>
   </div>
 </div>
 
-<!-- ═══ FORMULARIO DE PRODUCTO ═══ -->
-<div class="neon-card product-form mb-3" *ngIf="showForm">
-  <div class="form-header">
-    <h3>{{ editingProduct ? '✏️ Editar Producto' : '➕ Registrar Producto' }}</h3>
-    <button class="btn-ghost btn-sm" (click)="cancelForm()">✕ Cerrar</button>
-  </div>
-
-  <div class="form-grid">
-    <div class="form-group span-2">
-      <label class="form-label">Categoría</label>
-      <select class="form-input" [(ngModel)]="form.category" (change)="onCategoryChange()">
-        <option value="" disabled>Seleccionar categoría...</option>
-        <option *ngFor="let c of categories" [value]="c._id">{{ c.icon }} {{ c.name }} — Código: {{ c.code }}</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Código de Producto</label>
-      <input class="form-input code-input" [(ngModel)]="form.barcode" readonly>
-      <small class="form-hint" *ngIf="form.category">Prefijo: {{ getCategoryCode(form.category) }} + consecutivo</small>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Nombre del Producto</label>
-      <input class="form-input" [(ngModel)]="form.name" placeholder="Ej: Coca-Cola 350ml">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Precio de Compra ($)</label>
-      <input class="form-input" type="number" [(ngModel)]="form.purchasePrice" placeholder="0" min="0">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Precio de Venta ($)</label>
-      <input class="form-input" type="number" [(ngModel)]="form.salePrice" placeholder="0" min="0">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Stock Inicial</label>
-      <input class="form-input" type="number" [(ngModel)]="form.stock" min="0">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Stock Mínimo (alerta)</label>
-      <input class="form-input" type="number" [(ngModel)]="form.minStock" min="0">
-    </div>
-
-    <div class="form-group span-2">
-      <label class="form-label">Descripción (opcional)</label>
-      <input class="form-input" [(ngModel)]="form.description" placeholder="Detalles del producto...">
-    </div>
-  </div>
-
-  <!-- Margin indicator -->
-  <div class="margin-bar" *ngIf="form.purchasePrice && form.salePrice">
-    <span>Margen de ganancia:</span>
-    <span [class]="margin >= 30 ? 'margin-good' : margin >= 15 ? 'margin-ok' : 'margin-low'">
-      {{ margin | number:'1.1-1' }}% — Ganancia: ${{ (form.salePrice - form.purchasePrice) | number:'1.0-0' }}
-    </span>
-  </div>
-
-  <div class="form-actions">
-    <button class="btn-outline" (click)="cancelForm()">Cancelar</button>
-    <button class="btn-primary" (click)="saveProduct()">
-      {{ editingProduct ? '💾 Guardar Cambios' : '✅ Registrar Producto' }}
-    </button>
-  </div>
+<div class="pos-categories">
+  <button class="cat-btn" [class.active]="!filterCategory" (click)="filterCategory='';onFilterCategory()">Todos</button>
+  <button class="cat-btn" *ngFor="let c of categories" [class.active]="filterCategory === c._id"
+          (click)="filterCategory = c._id; onFilterCategory()">{{ c.icon }} {{ c.name }}</button>
 </div>
 
 <!-- ═══ TABLA DE PRODUCTOS ═══ -->
@@ -84,8 +33,14 @@
   <table class="data-table">
     <thead>
       <tr>
-        <th>Código</th><th>Producto</th><th>Categoría</th><th>Compra</th><th>Venta</th>
-        <th>Stock</th><th>Estado</th><th *ngIf="authService.hasRole('admin')">Acciones</th>
+        <th (click)="sortBy('barcode')" style="cursor:pointer">Código <span *ngIf="sortColumn==='barcode'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th (click)="sortBy('name')" style="cursor:pointer">Producto <span *ngIf="sortColumn==='name'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th (click)="sortBy('categoryName')" style="cursor:pointer">Categoría <span *ngIf="sortColumn==='categoryName'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th (click)="sortBy('purchasePrice')" style="cursor:pointer">Compra <span *ngIf="sortColumn==='purchasePrice'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th (click)="sortBy('salePrice')" style="cursor:pointer">Venta <span *ngIf="sortColumn==='salePrice'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th (click)="sortBy('stock')" style="cursor:pointer">Stock <span *ngIf="sortColumn==='stock'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th (click)="sortBy('isActive')" style="cursor:pointer">Estado <span *ngIf="sortColumn==='isActive'">{{sortDirection==='asc'?'↑':'↓'}}</span></th>
+        <th *ngIf="authService.hasRole('admin')">Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -103,8 +58,9 @@
         <td><span [class]="p.isActive ? 'badge badge-green' : 'badge badge-red'">{{ p.isActive ? 'Activo' : 'Inactivo' }}</span></td>
         <td *ngIf="authService.hasRole('admin')">
           <button class="btn-ghost btn-sm" (click)="openEditForm(p)" title="Editar">✏️</button>
-          <button class="btn-ghost btn-sm" (click)="adjustStock(p)" title="Ajustar stock">📦</button>
-          <button class="btn-ghost btn-sm" (click)="deleteProduct(p)" title="Desactivar">🗑️</button>
+          <button class="btn-ghost btn-sm" (click)="adjustStock(p)" title="Ajustar stock" *ngIf="p.isActive">📦</button>
+          <button class="btn-ghost btn-sm" (click)="toggleStatus(p)" [title]="p.isActive ? 'Desactivar' : 'Activar'">{{ p.isActive ? '🔴' : '🟢' }}</button>
+          <button class="btn-ghost btn-sm" (click)="deleteProduct(p)" title="Eliminar definitivamente" *ngIf="!p.isActive">🗑️</button>
         </td>
       </tr>
       <tr *ngIf="products.length === 0">
@@ -119,5 +75,81 @@
   <div style="display:flex;gap:0.25rem">
     <button class="btn-outline btn-sm" *ngFor="let p of pageArray" [class.btn-primary]="p === currentPage"
             (click)="goToPage(p)">{{ p }}</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL FORMULARIO DE PRODUCTO ═══ -->
+<div class="modal-overlay" *ngIf="showForm" (click)="cancelForm()">
+  <div class="modal" (click)="$event.stopPropagation()" style="max-width:700px;">
+    <h2 class="modal-title">{{ editingProduct ? '✏️ Editar Producto' : '➕ Registrar Producto' }}</h2>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Categoría *</label>
+        <select class="form-input" [(ngModel)]="form.category" (change)="onDependencyChange()">
+          <option value="" disabled>Seleccionar categoría...</option>
+          <option *ngFor="let c of categories" [value]="c._id">{{ c.icon }} {{ c.name }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Proveedor *</label>
+        <select class="form-input" [(ngModel)]="form.supplier" (change)="onDependencyChange()">
+          <option value="" disabled>Seleccionar proveedor...</option>
+          <option *ngFor="let s of suppliers" [value]="s._id">{{ s.name }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Código de Producto</label>
+        <input class="form-input" [(ngModel)]="form.barcode" readonly>
+        <small class="form-hint" *ngIf="form.category && form.supplier">Prefijo: {{ getCategoryCode(form.category) }}{{ getSupplierCode(form.supplier) }} + consecutivo</small>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nombre del Producto</label>
+        <input class="form-input" [(ngModel)]="form.name" placeholder="Ej: Coca-Cola 350ml">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Precio de Compra ($)</label>
+        <input class="form-input" type="number" [(ngModel)]="form.purchasePrice" placeholder="0" min="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Precio de Venta ($)</label>
+        <input class="form-input" type="number" [(ngModel)]="form.salePrice" placeholder="0" min="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Stock Inicial</label>
+        <input class="form-input" type="number" [(ngModel)]="form.stock" min="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Stock Mínimo (alerta)</label>
+        <input class="form-input" type="number" [(ngModel)]="form.minStock" min="0">
+      </div>
+
+      <div class="form-group span-2">
+        <label class="form-label">Descripción (opcional)</label>
+        <input class="form-input" [(ngModel)]="form.description" placeholder="Detalles del producto...">
+      </div>
+    </div>
+
+    <!-- Margin indicator -->
+    <div class="margin-bar" *ngIf="form.purchasePrice && form.salePrice">
+      <span>Margen de ganancia:</span>
+      <span [class]="margin >= 30 ? 'margin-good' : margin >= 15 ? 'margin-ok' : 'margin-low'">
+        {{ margin | number:'1.1-1' }}% — Ganancia: ${{ (form.salePrice - form.purchasePrice) | number:'1.0-0' }}
+      </span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-outline" (click)="cancelForm()">Cancelar</button>
+      <button class="btn-primary" (click)="saveProduct()">
+        {{ editingProduct ? '💾 Guardar Cambios' : '✅ Registrar Producto' }}
+      </button>
+    </div>
   </div>
 </div>

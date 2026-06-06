@@ -13,12 +13,13 @@ const routes: Routes = [
       { path: 'pos',        loadChildren: () => import('./features/pos/pos.module').then(m => m.PosModule) },
       { path: 'cash',       loadChildren: () => import('./features/cash/cash.module').then(m => m.CashModule) },
       { path: 'reports',    loadChildren: () => import('./features/reports/reports.module').then(m => m.ReportsModule),    canActivate: [RoleGuard], data: { roles: ['admin'] } },
-      { path: 'alerts',     loadChildren: () => import('./features/alerts/alerts.module').then(m => m.AlertsModule),      canActivate: [RoleGuard], data: { roles: ['admin'] } },
+      { path: 'alerts',     loadChildren: () => import('./features/alerts/alerts.module').then(m => m.AlertsModule),      canActivate: [RoleGuard], data: { roles: ['admin', 'cajero'] } },
       { path: 'storefront', loadChildren: () => import('./features/storefront/storefront.module').then(m => m.StorefrontModule) },
       { path: 'settings',   loadChildren: () => import('./features/settings/settings.module').then(m => m.SettingsModule), canActivate: [RoleGuard], data: { roles: ['admin', 'cliente'] } },
       // ── NUEVAS RUTAS ────────────────────────────────────────────────────
       { path: 'suppliers',  loadChildren: () => import('./features/suppliers/suppliers.module').then(m => m.SuppliersModule),  canActivate: [RoleGuard], data: { roles: ['admin'] } },
       { path: 'purchases',  loadChildren: () => import('./features/purchases/purchases.module').then(m => m.PurchasesModule),  canActivate: [RoleGuard], data: { roles: ['admin'] } },
+      { path: 'debtors',    loadChildren: () => import('./features/debtors/debtors.module').then(m => m.DebtorsModule),      canActivate: [RoleGuard], data: { roles: ['admin', 'cajero'] } },
       { path: 'expenses',   loadChildren: () => import('./features/expenses/expenses.module').then(m => m.ExpensesModule),    canActivate: [RoleGuard], data: { roles: ['admin'] } },
       { path: 'finance',    loadChildren: () => import('./features/finance/finance.module').then(m => m.FinanceModule),       canActivate: [RoleGuard], data: { roles: ['admin'] } },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }

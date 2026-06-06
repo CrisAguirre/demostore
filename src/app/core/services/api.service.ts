@@ -52,6 +52,18 @@ export class ApiService {
 
   // ── Products ──────────────────────────────────────────────────────────────
 
+  /**
+   * Returns ALL active products from cache or /products/all.
+   * Both POS and Inventory use this for local-first search.
+   */
+  getAllProducts(): Observable<any> {
+    return this.cachedGet(
+      'all-products',
+      this.http.get(`${this.baseUrl}/products/all`),
+      TTL.products
+    );
+  }
+
   getProducts(params?: any): Observable<any> {
     const k = this.key('products', params);
     return this.cachedGet(k, this.http.get(`${this.baseUrl}/products`, { params }), TTL.products);
@@ -63,19 +75,19 @@ export class ApiService {
 
   createProduct(data: any): Observable<any> {
     return this.http.post(`${this.baseUrl}/products`, data).pipe(
-      tap(() => this.preload.invalidatePrefix('products'))
+      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate('all-products'); })
     );
   }
 
   updateProduct(id: string, data: any): Observable<any> {
     return this.http.put(`${this.baseUrl}/products/${id}`, data).pipe(
-      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate(`product:${id}`); })
+      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate(`product:${id}`); this.preload.invalidate('all-products'); })
     );
   }
 
   deleteProduct(id: string): Observable<any> {
     return this.http.delete(`${this.baseUrl}/products/${id}`).pipe(
-      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate(`product:${id}`); })
+      tap(() => { this.preload.invalidatePrefix('products'); this.preload.invalidate(`product:${id}`); this.preload.invalidate('all-products'); })
     );
   }
 
@@ -84,14 +96,15 @@ export class ApiService {
       tap(() => {
         this.preload.invalidatePrefix('products');
         this.preload.invalidate(`product:${id}`);
+        this.preload.invalidate('all-products');
         this.preload.invalidatePrefix('alerts');
         this.preload.invalidatePrefix('sales-summary');
       })
     );
   }
 
-  getNextBarcode(categoryId: string): Observable<any> {
-    return this.http.get(`${this.baseUrl}/products/next-barcode`, { params: { categoryId } });
+  getNextBarcode(categoryId: string, supplierId: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/products/next-barcode`, { params: { categoryId, supplierId } });
   }
 
   // ── Categories ────────────────────────────────────────────────────────────
@@ -376,4 +389,54 @@ export class ApiService {
     const params: any = months ? { months: months.toString() } : undefined;
     return this.cachedGet(k, this.http.get(`${this.baseUrl}/finance/monthly-pl`, { params }), TTL.finance);
   }
+
+  // ── Debtors (Deudores) ──────────────────────────────────────────────────
+
+  getDebtors(params?: any): Observable<any> {
+    const k = this.key('debtors', params);
+    return this.cachedGet(k, this.http.get(`${this.baseUrl}/debtors`, { params }), TTL.suppliers);
+  }
+
+  getDebtor(id: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/debtors/${id}`);
+  }
+
+  createDebtor(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/debtors`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('debtors'))
+    );
+  }
+
+  updateDebtor(id: string, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/debtors/${id}`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('debtors'))
+    );
+  }
+
+  deleteDebtor(id: string): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/debtors/${id}`).pipe(
+      tap(() => this.preload.invalidatePrefix('debtors'))
+    );
+  }
+
+  addDebtorTransaction(id: string, data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/debtors/${id}/transactions`, data).pipe(
+      tap(() => this.preload.invalidatePrefix('debtors'))
+    );
+  }
+
+  getDebtorTransactions(id: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/debtors/${id}/transactions`);
+  }
+
+  getNextDebtorCode(): Observable<any> {
+    return this.http.get(`${this.baseUrl}/debtors/next-code`);
+  }
+
+  checkDebtorMora(): Observable<any> {
+    return this.http.post(`${this.baseUrl}/debtors/check-mora`, {}).pipe(
+      tap(() => this.preload.invalidatePrefix('alerts'))
+    );
+  }
 }
+

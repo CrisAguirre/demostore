@@ -91,7 +91,18 @@ export class SidebarComponent {
         { icon: '📊', label: 'Mis Compras',    route: '/dashboard' },
         { icon: '🌐', label: 'Tienda Virtual', route: '/storefront' }
       ];
-    } else {
+    } else if (role === 'cajero') {
+      this.menuItems = [
+        { divider: 'Operaciones' },
+        { icon: '📊', label: 'Dashboard',       route: '/dashboard' },
+        { icon: '📦', label: 'Inventario',      route: '/inventory' },
+        { icon: '🛒', label: 'Punto de Venta',  route: '/pos' },
+        { icon: '💰', label: 'Caja',            route: '/cash' },
+        { divider: 'Gestión' },
+        { icon: '👥', label: 'Deudores',        route: '/debtors' },
+        { icon: '🔔', label: 'Alertas',         route: '/alerts' }
+      ];
+    } else if (role === 'admin') {
       this.menuItems = [
         // Operaciones diarias
         { divider: 'Operaciones' },
@@ -99,27 +110,24 @@ export class SidebarComponent {
         { icon: '📦', label: 'Inventario',      route: '/inventory' },
         { icon: '🛒', label: 'Punto de Venta',  route: '/pos' },
         { icon: '💰', label: 'Caja',            route: '/cash' },
+        // Compras y proveedores
+        { divider: 'Compras' },
+        { icon: '🏭', label: 'Proveedores',     route: '/suppliers' },
+        { icon: '🛍️', label: 'Compras',         route: '/purchases' },
+        { icon: '👥', label: 'Deudores',        route: '/debtors' },
+        // Gastos
+        { divider: 'Gastos' },
+        { icon: '💸', label: 'Gastos Operativos', route: '/expenses' },
+        // Inteligencia
+        { divider: 'Inteligencia' },
+        { icon: '🧠', label: 'Centro Financiero', route: '/finance' },
+        { icon: '📈', label: 'Reportes',        route: '/reports' },
+        { icon: '🔔', label: 'Alertas',         route: '/alerts' },
+        // Configuración
+        { divider: 'Sistema' },
+        { icon: '🌐', label: 'Tienda Virtual',  route: '/storefront' },
+        { icon: '⚙️', label: 'Configuración',    route: '/settings' }
       ];
-      if (role === 'admin') {
-        this.menuItems.push(
-          // Compras y proveedores
-          { divider: 'Compras' },
-          { icon: '🏭', label: 'Proveedores',   route: '/suppliers' },
-          { icon: '🛍️', label: 'Compras',       route: '/purchases' },
-          // Gastos
-          { divider: 'Gastos' },
-          { icon: '💸', label: 'Gastos Operativos', route: '/expenses' },
-          // Inteligencia
-          { divider: 'Inteligencia' },
-          { icon: '🧠', label: 'Centro Financiero', route: '/finance' },
-          { icon: '📈', label: 'Reportes',      route: '/reports' },
-          { icon: '🔔', label: 'Alertas',       route: '/alerts' },
-          // Configuración
-          { divider: 'Sistema' },
-          { icon: '🌐', label: 'Tienda Virtual', route: '/storefront' },
-          { icon: '⚙️', label: 'Configuración', route: '/settings' }
-        );
-      }
     }
   }
 }

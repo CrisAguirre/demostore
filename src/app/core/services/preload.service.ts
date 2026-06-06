@@ -1,7 +1,7 @@
 /**
  * preload.service.ts
  *
- * Three responsibilities:
+ * Four responsibilities:
  *
  *  1. WARMUP  – pings /api/health the moment the app loads so Render's
  *               free-tier server wakes up before the user hits "Login".
@@ -13,6 +13,10 @@
  *
  *  3. KEEP-ALIVE – once logged in, pings /api/health every 13 min so
  *                  Render never spins the server down.
+ *
+ *  4. PERSIST – the product catalog is saved to localStorage so that
+ *               on page refresh the UI can show products instantly,
+ *               even while Render cold-starts (~30-50s).
  *
  * ApiService reads from this cache before making any HTTP call.
  */
@@ -33,6 +37,10 @@ const TTL = {
   currentCash:   3 * 60 * 1000,
 } as const;
 
+// Keys that are persisted to localStorage for instant load
+const PERSIST_KEYS = ['all-products', 'categories', 'settings'] as const;
+const LS_PREFIX = 'demo_cache_';   // "Demostore cache"
+
 interface CacheEntry<T = unknown> {
   data: T;
   expiresAt: number;
@@ -44,7 +52,32 @@ export class PreloadService {
   private cache             = new Map<string, CacheEntry>();
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    this.hydrateFromLocalStorage();
+  }
+
+  // ── 0. Hydrate from localStorage on startup ───────────────────────────────
+  /**
+   * Loads persisted data so the UI has something to show immediately
+   * while the server might still be waking up.
+   */
+  private hydrateFromLocalStorage(): void {
+    for (const key of PERSIST_KEYS) {
+      try {
+        const raw = localStorage.getItem(LS_PREFIX + key);
+        if (!raw) continue;
+        const entry: CacheEntry = JSON.parse(raw);
+        // Use persisted data even if TTL expired — it's better than nothing.
+        // We mark it with a short TTL so it gets refreshed on the next preload.
+        if (Date.now() > entry.expiresAt) {
+          entry.expiresAt = Date.now() + 30_000; // stale for 30s, then refresh wins
+        }
+        this.cache.set(key, entry);
+      } catch {
+        localStorage.removeItem(LS_PREFIX + key);
+      }
+    }
+  }
 
   // ── 1. Warmup ──────────────────────────────────────────────────────────────
   /**
@@ -69,9 +102,10 @@ export class PreloadService {
         // Cache each slice with its own TTL
         this.set('settings',                   payload.settings,    TTL.settings);
         this.set('categories',                 payload.categories,  TTL.categories);
-        // Products: keyed to match what POS requests → { active:'true', limit:200 }
-        this.set('products:{"active":"true","limit":200}',
-                                               payload.products,    TTL.products);
+
+        // Products: unified key for both POS and Inventory
+        this.set('all-products',               payload.products,    TTL.products);
+
         // Alerts: unread filter
         this.set('alerts:{"read":"false"}',    payload.alerts,      TTL.alerts);
         // Sales summaries
@@ -116,23 +150,42 @@ export class PreloadService {
   }
 
   set<T>(key: string, data: T, ttlMs: number): void {
-    this.cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+    const entry: CacheEntry<T> = { data, expiresAt: Date.now() + ttlMs };
+    this.cache.set(key, entry);
+
+    // Persist important keys to localStorage
+    if ((PERSIST_KEYS as readonly string[]).includes(key)) {
+      try {
+        localStorage.setItem(LS_PREFIX + key, JSON.stringify(entry));
+      } catch {
+        // localStorage full or unavailable — ignore silently
+      }
+    }
   }
 
   /** Remove one or more exact keys */
   invalidate(...keys: string[]): void {
-    keys.forEach(k => this.cache.delete(k));
+    keys.forEach(k => {
+      this.cache.delete(k);
+      localStorage.removeItem(LS_PREFIX + k);
+    });
   }
 
   /** Remove all keys that start with a given prefix */
   invalidatePrefix(prefix: string): void {
     for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) this.cache.delete(key);
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+        localStorage.removeItem(LS_PREFIX + key);
+      }
     }
   }
 
   /** Wipe everything (e.g. on logout) */
   clear(): void {
     this.cache.clear();
+    for (const key of PERSIST_KEYS) {
+      localStorage.removeItem(LS_PREFIX + key);
+    }
   }
 }

@@ -4,6 +4,19 @@
 .filter-select { width: 200px; }
 .search-input { width: 220px; }
 
+/* ── Category Filters ── */
+.pos-categories {
+  display: flex; gap: 0.375rem; flex-wrap: wrap; padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem; margin-top: 0.5rem;
+}
+.cat-btn {
+  padding: 0.375rem 0.75rem; border-radius: 20px; border: 1px solid var(--bg-input);
+  background: var(--bg-card); font-size: 0.75rem; white-space: nowrap; cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.15s;
+}
+.cat-btn.active { background: var(--neon-cyan); color: #fff; border-color: var(--neon-cyan); }
+
 /* ── Product Form ── */
 .product-form { animation: fadeInUp 0.3s ease; }
 .form-header {
