@@ -35,7 +35,7 @@ export class SettingsService {
   }
 
   get storeName(): string {
-    return this.settings?.storeName || 'Demostore';
+    return this.settings?.storeName || 'Daily Mart';
   }
 
   get logoUrl(): string {
